@@ -65,21 +65,67 @@ _progress_stop() {
 }
 
 
-# Validate environment
+# Auto-setup: Initialize submodule if missing or corrupted
+_auto_setup() {
+    local needs_setup=false
+    
+    # Check if opencode directory doesn't exist or is empty
+    if [[ ! -d "$OPENCODE_DIR" ]] || [[ ! -d "$OPENCODE_DIR/.git" ]]; then
+        needs_setup=true
+    fi
+    
+    # Check if .git is a file (submodule) but target doesn't exist
+    if [[ -f "$OPENCODE_DIR/.git" ]]; then
+        local git_dir=$(cat "$OPENCODE_DIR/.git" | sed 's/gitdir: //')
+        if [[ ! -d "$OPENCODE_PATCHER_DIR/$git_dir" ]]; then
+            needs_setup=true
+        fi
+    fi
+    
+    [[ "$needs_setup" == false ]] && return 0
+    
+    _progress_start "First-time setup: initializing OpenCode submodule..."
+    
+    # Navigate to patcher directory
+    (
+        cd "$OPENCODE_PATCHER_DIR" || exit 1
+        
+        # Remove corrupted opencode directory if exists
+        [[ -d "$OPENCODE_DIR" ]] && rm -rf "$OPENCODE_DIR"
+        
+        # Initialize submodule
+        if ! git submodule update --init --recursive 2>&1 | grep -v "^Cloning into"; then
+            exit 1
+        fi
+    ) || {
+        _progress_stop "error" "Failed to initialize OpenCode submodule"
+        echo -e "${BLUE}ℹ${NC} Manual fix: cd $OPENCODE_PATCHER_DIR && git submodule update --init --recursive" >&2
+        return 1
+    }
+    
+    _progress_stop "success" "OpenCode submodule initialized"
+    return 0
+}
+
+# Validate environment (with auto-setup)
 _validate_env() {
+    # Check bun first (required for everything)
+    command -v bun >/dev/null 2>&1 || {
+        echo -e "${RED}✗${NC} bun not found. Install: https://bun.sh" >&2
+        return 1
+    }
+    
+    # Auto-setup if needed (first-time or corrupted)
+    _auto_setup || return 1
+    
+    # Final validation
     [[ ! -d "$OPENCODE_DIR" ]] && {
-        echo -e "${RED}✗${NC} OpenCode directory not found: $OPENCODE_DIR" >&2
-        echo -e "${BLUE}ℹ${NC} Run: git clone https://github.com/sst/opencode $OPENCODE_DIR" >&2
+        echo -e "${RED}✗${NC} OpenCode directory not found after setup: $OPENCODE_DIR" >&2
         return 1
     }
 
     [[ ! -d "$OPENCODE_DIR/.git" ]] && {
-        echo -e "${RED}✗${NC} Not a git repository: $OPENCODE_DIR" >&2
-        return 1
-    }
-
-    command -v bun >/dev/null 2>&1 || {
-        echo -e "${RED}✗${NC} bun not found. Install: https://bun.sh" >&2
+        echo -e "${RED}✗${NC} Not a git repository after setup: $OPENCODE_DIR" >&2
         return 1
     }
 
