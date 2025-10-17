@@ -125,7 +125,7 @@ The patch modifies OpenCode's message system in **six conceptual areas**:
 
 **Code:**
 ```typescript
-// PATCH: agents-md-enforcement @ OpenCode v0.15.6
+// PATCH: agents-md-enforcement @ OpenCode v0.15.7
 // Define RulesPart message type for pinned conversation rules
 export const RulesPart = PartBase.extend({
   type: z.literal("rules"),
@@ -175,7 +175,7 @@ export const Part = z.discriminatedUnion("type", [
 
 **Add:**
 ```typescript
-// PATCH: agents-md-enforcement @ OpenCode v0.15.6
+// PATCH: agents-md-enforcement @ OpenCode v0.15.7
 // Convert rules parts to text for AI consumption
 if (part.type === "rules") {
   return [{ type: "text", text: part.rules }]
@@ -199,7 +199,7 @@ export function filterSummarized(msgs: MessageV2.WithParts[]) {
 
 **Replace with:**
 ```typescript
-// PATCH: agents-md-enforcement @ OpenCode v0.15.6
+// PATCH: agents-md-enforcement @ OpenCode v0.15.7
 // Preserve pinned rules messages during summarization
 export function filterSummarized(msgs: MessageV2.WithParts[]) {
   const i = msgs.findLastIndex((m) => m.info.role === "assistant" && !!m.info.summary)
@@ -230,7 +230,7 @@ system.push(...(await SystemPrompt.custom()))  // <-- THIS LINE
 **Comment out:**
 ```typescript
 system.push(...(await SystemPrompt.environment()))
-// PATCH: agents-md-enforcement @ OpenCode v0.15.6
+// PATCH: agents-md-enforcement @ OpenCode v0.15.7
 // Disable system prompt injection for AGENTS.md (moved to conversation-based injection)
 // This ensures rules remain visible in conversation context through summarization cycles.
 // The RulesPart mechanism injects AGENTS.md as a pinned conversation message instead.
@@ -247,7 +247,7 @@ system.push(...(await SystemPrompt.environment()))
 
 **Add:**
 ```typescript
-// PATCH: agents-md-enforcement @ OpenCode v0.15.6
+// PATCH: agents-md-enforcement @ OpenCode v0.15.7
 // Inject RulesPart on first user message to preserve rules through summarization
 const existingMessages = await Session.messages(input.sessionID)
 const isFirstMessage = existingMessages.filter((m) => m.info.role === "user").length === 0
@@ -428,7 +428,7 @@ var Version = "dev"
 **Add after:**
 ```go
 var Version = "dev"
-// PATCH: commit-hash-footer @ OpenCode v0.15.6
+// PATCH: commit-hash-footer @ OpenCode v0.15.7
 // CommitHash is injected at build time via -ldflags to display version identifier
 var CommitHash = ""
 ```
@@ -443,7 +443,7 @@ var CommitHash = ""
 
 **Add before `app.New()` call:**
 ```go
-// PATCH: commit-hash-footer @ OpenCode v0.15.6
+// PATCH: commit-hash-footer @ OpenCode v0.15.7
 // Prepare commit hash with fallback for version display
 commitHash := CommitHash
 if commitHash == "" {
@@ -474,7 +474,7 @@ type App struct {
 ```go
 type App struct {
     Version           string
-    // PATCH: commit-hash-footer @ OpenCode v0.15.6
+    // PATCH: commit-hash-footer @ OpenCode v0.15.7
     // CommitHash stores version identifier for footer display
     CommitHash        string
     // ... other fields
@@ -498,7 +498,7 @@ func New(
 func New(
     ctx context.Context,
     version string,
-    // PATCH: commit-hash-footer @ OpenCode v0.15.6
+    // PATCH: commit-hash-footer @ OpenCode v0.15.7
     commitHash string,
     project *opencode.Project,
     // ... other params
@@ -517,7 +517,7 @@ app := &App{
 ```go
 app := &App{
     Version:           version,
-    // PATCH: commit-hash-footer @ OpenCode v0.15.6
+    // PATCH: commit-hash-footer @ OpenCode v0.15.7
     CommitHash:        commitHash,
     // ... other fields
 }
@@ -541,7 +541,7 @@ version := base(" " + m.app.Version)
 open := base("open")
 code := emphasis("code")
 
-// PATCH: commit-hash-footer @ OpenCode v0.15.6
+// PATCH: commit-hash-footer @ OpenCode v0.15.7
 // Build version string dynamically based on CommitHash value
 versionText := ""
 
@@ -723,7 +723,7 @@ system.push(...(await SystemPrompt.custom()))  // <-- THIS LINE
 **Replace with:**
 ```typescript
 system.push(...(await SystemPrompt.environment()))
-// PATCH: summarization-enhancement-p0 @ OpenCode v0.15.6
+// PATCH: summarization-enhancement-p0 @ OpenCode v0.15.7
 // Disable AGENTS.md injection during summarization (already preserved as RulesPart)
 // This eliminates ~1500 tokens of redundant content per summarization
 // system.push(...(await SystemPrompt.custom()))
@@ -893,7 +893,7 @@ The patch modifies OpenCode's summarization in **two conceptual areas**:
 
 **Add:**
 ```typescript
-// PATCH: summarization-enhancement-p1 @ OpenCode v0.15.6
+// PATCH: summarization-enhancement-p1 @ OpenCode v0.15.7
 // Detect active agent from conversation history to preserve agent context in summary
 // This ensures agent-specific work is properly captured during summarization
 let agentContext = ""
@@ -951,7 +951,7 @@ for (const msg of toSummarize.slice(-10).reverse()) {
   content: [
     {
       type: "text",
-      // PATCH: summarization-enhancement-p1 @ OpenCode v0.15.6
+      // PATCH: summarization-enhancement-p1 @ OpenCode v0.15.7
       // Append agent context to ensure AI includes agent information in summary
       text: `Provide a detailed but concise summary of our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next.${agentContext}`,
     },
@@ -1114,7 +1114,7 @@ const broken = new Set<string>()
 
 **Replace with:**
 ```typescript
-// PATCH: lsp-retry-mechanism @ OpenCode v0.15.6
+// PATCH: lsp-retry-mechanism @ OpenCode v0.15.7
 // Replace Set with Map to track retry metadata per server
 interface BrokenServer {
   failureCount: number
@@ -1133,7 +1133,7 @@ const broken = new Map<string, BrokenServer>()
 
 **Add:**
 ```typescript
-// PATCH: lsp-retry-mechanism @ OpenCode v0.15.6
+// PATCH: lsp-retry-mechanism @ OpenCode v0.15.7
 // Determine if a broken server should be retried based on retry schedule
 function shouldRetryServer(serverInfo: BrokenServer): boolean {
   const now = Date.now()
@@ -1180,7 +1180,7 @@ if (broken.has(server.id)) continue
 
 **Replace with:**
 ```typescript
-// PATCH: lsp-retry-mechanism @ OpenCode v0.15.6
+// PATCH: lsp-retry-mechanism @ OpenCode v0.15.7
 // Check if server should be retried instead of permanently blocking
 const serverInfo = broken.get(server.id)
 if (serverInfo) {
@@ -1209,7 +1209,7 @@ catch (err) {
 **Replace with:**
 ```typescript
 catch (err) {
-  // PATCH: lsp-retry-mechanism @ OpenCode v0.15.6
+  // PATCH: lsp-retry-mechanism @ OpenCode v0.15.7
   // Use markServerFailed to schedule retry instead of permanent failure
   markServerFailed(server.id)
   log.exception(`LSP server '${server.id}' failed to start (attempt ${broken.get(server.id)?.failureCount ?? 1}/3)`, err)
@@ -1350,7 +1350,7 @@ await Promise.all(migrations.map(async (migration) => {
 
 **Replace with:**
 ```typescript
-// PATCH: storage-migration-safety @ OpenCode v0.15.6
+// PATCH: storage-migration-safety @ OpenCode v0.15.7
 // Add transactional migration with backup/rollback capability
 for (const migration of migrations) {
   const backupPath = `${storagePath}.backup-${migration.version}`
@@ -1541,7 +1541,7 @@ The patch modifies OpenCode in **two conceptual areas**:
 
 **Add after similar field:**
 ```typescript
-// PATCH: provider-blacklist-config @ OpenCode v0.15.6
+// PATCH: provider-blacklist-config @ OpenCode v0.15.7
 // Add configurable model blacklist instead of hardcoded values
 modelBlacklist: z
   .array(
@@ -1570,7 +1570,7 @@ modelBlacklist: z
 
 **Replace with:**
 ```typescript
-// PATCH: provider-blacklist-config @ OpenCode v0.15.6
+// PATCH: provider-blacklist-config @ OpenCode v0.15.7
 // Use configurable model blacklist instead of hardcoded values
 const config = await Config.get()
 const blacklist = config.modelBlacklist ?? [
@@ -1689,12 +1689,11 @@ The `tools/apply-all-patches.ts` script handles this automatically.
 
 ## Version Tracking
 
-**Current OpenCode Version:** v0.15.6  
-**Last Updated:** October 17, 2025  
-**Total Patches:** 7 active patches
+**Current OpenCode Version:** v0.15.7  
+**Patch Compatibility:** All patches validated against this version
 
-**Compatibility Notes:**
-- All patches include version markers (e.g., `// PATCH: name @ OpenCode v0.15.6`)
+**Key Information:**
+- All patches include version markers (e.g., `// PATCH: name @ OpenCode v0.15.7`)
 - Version markers track which OpenCode version patch was designed for
 - Use version markers to identify sections needing review when OpenCode changes
 

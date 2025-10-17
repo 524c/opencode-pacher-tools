@@ -50,8 +50,8 @@ oc-reinstall     # Full reinstall (if corrupted)
 Build and upgrade commands run with minimal output by design. A spinner shows progress for each phase (sync, patches, build, install). Only errors are printed immediately; successful phases stay silent. At completion you get concise summary lines:
 
 ```
-opencode build: v0.15.6
-opencode install: v0.15.6
+opencode build: v0.15.7
+opencode install: v0.15.7
 ```
 There is no verbose or quiet toggle—minimal mode is always enabled to keep logs clean. Errors still surface instantly with a leading ✗ marker.
 
