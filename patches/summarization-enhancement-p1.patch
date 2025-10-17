@@ -1,0 +1,48 @@
+diff --git a/packages/opencode/src/session/compaction.ts b/packages/opencode/src/session/compaction.ts
+index 14026c50..4b9d46dc 100644
+--- a/packages/opencode/src/session/compaction.ts
++++ b/packages/opencode/src/session/compaction.ts
+@@ -134,6 +134,34 @@ export namespace SessionCompaction {
+       },
+     })) as MessageV2.TextPart
+ 
++    // Detect active agent from conversation history to preserve agent context in summary
++    // This ensures agent-specific work is properly captured during summarization
++    let agentContext = ""
++    for (const msg of toSummarize.slice(-10).reverse()) {
++      // Check for AgentPart in message parts (user switched agents explicitly)
++      if (msg.info.role === "user" && msg.parts) {
++        const agentPart = msg.parts.find((p: any) => p.type === "agent")
++        if (agentPart) {
++          agentContext = `\n\nIMPORTANT CONTEXT: The user switched to the '${(agentPart as any).name}' agent during this conversation. This agent specializes in specific tasks and may have different capabilities than the default agent. Ensure your summary mentions this agent switch and any agent-specific work performed.`
++          break
++        }
++      }
++      // Check for agent mentions in text parts (delegation patterns)
++      if (msg.info.role === "assistant" && msg.parts) {
++        for (const part of msg.parts) {
++          if (part.type === "text" && typeof part.text === "string") {
++            // Look for common agent delegation patterns
++            const agentMentions = part.text.match(/(?:delegat(?:ed|ing) to|switched to|using|calling) (?:the )?([a-z0-9-]+) agent/i)
++            if (agentMentions) {
++              agentContext = `\n\nIMPORTANT CONTEXT: The conversation involved delegation to the '${agentMentions[1]}' agent. This agent has specialized capabilities and may have performed domain-specific tasks. Ensure your summary captures which tasks were handled by this agent.`
++              break
++            }
++          }
++        }
++        if (agentContext) break
++      }
++    }
++
+     let summaryText = ""
+     const stream = streamText({
+       maxRetries: 10,
+@@ -154,7 +182,7 @@ export namespace SessionCompaction {
+           content: [
+             {
+               type: "text",
+-              text: "Provide a detailed but concise summary of our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next.",
++              text: `Provide a detailed but concise summary of our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next.${agentContext}`,
+             },
+           ],
+         },

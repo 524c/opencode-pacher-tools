@@ -1,0 +1,23 @@
+.DS_Store
+*.log
+node_modules/
+.env
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+dist/
+build/
+temp_*
+
+# Legacy symlink (removed - now using git submodule)
+opencode-repo/
+opencode/
+
+# Testing and validation artifacts
+COMMIT_HASH_VALIDATION.md
+PROVAS_COMPLETAS.md
+TEST_RESULTS.md
+tools/test-patch-application.ts
+test-build-mode-validation.zsh

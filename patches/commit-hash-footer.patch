@@ -1,0 +1,76 @@
+diff --git a/packages/tui/cmd/opencode/main.go b/packages/tui/cmd/opencode/main.go
+index 22841fc8..f5ce1662 100644
+--- a/packages/tui/cmd/opencode/main.go
++++ b/packages/tui/cmd/opencode/main.go
+@@ -22,6 +22,8 @@ import (
+ )
+ 
+ var Version = "dev"
++var CommitHash = "unknown"
++var BuildMode = "commit"
+ 
+ func main() {
+ 	version := Version
+@@ -119,7 +121,7 @@ func main() {
+ 	}()
+ 
+ 	// Create main context for the application
+-	app_, err := app.New(ctx, version, project, path, agents, httpClient, model, prompt, agent, sessionID)
++	app_, err := app.New(ctx, version, CommitHash, BuildMode, project, path, agents, httpClient, model, prompt, agent, sessionID)
+ 	if err != nil {
+ 		panic(err)
+ 	}
+diff --git a/packages/tui/internal/app/app.go b/packages/tui/internal/app/app.go
+index 4a891f28..9dd90984 100644
+--- a/packages/tui/internal/app/app.go
++++ b/packages/tui/internal/app/app.go
+@@ -32,6 +32,8 @@ type App struct {
+ 	Agents            []opencode.Agent
+ 	Providers         []opencode.Provider
+ 	Version           string
++	CommitHash        string
++	BuildMode         string
+ 	StatePath         string
+ 	Config            *opencode.Config
+ 	Client            *opencode.Client
+@@ -102,6 +104,8 @@ type PermissionRespondedToMsg struct {
+ func New(
+ 	ctx context.Context,
+ 	version string,
++	commitHash string,
++	buildMode string,
+ 	project *opencode.Project,
+ 	path *opencode.Path,
+ 	agents []opencode.Agent,
+@@ -198,6 +202,8 @@ func New(
+ 		Project:        *project,
+ 		Agents:         agents,
+ 		Version:        version,
++		CommitHash:     commitHash,
++		BuildMode:      buildMode,
+ 		StatePath:      appStatePath,
+ 		Config:         configInfo,
+ 		State:          appState,
+diff --git a/packages/tui/internal/components/status/status.go b/packages/tui/internal/components/status/status.go
+index aba80900..589b2f36 100644
+--- a/packages/tui/internal/components/status/status.go
++++ b/packages/tui/internal/components/status/status.go
+@@ -69,7 +69,17 @@ func (m *statusComponent) logo() string {
+ 
+ 	open := base("open")
+ 	code := emphasis("code")
+-	version := base(" " + m.app.Version)
++
++	// Build version string based on build mode
++	versionStr := m.app.CommitHash
++	if m.app.BuildMode == "commit" {
++		// Commit mode: show "dev abc1234 [524c]"
++		versionStr = "dev " + m.app.CommitHash
++	}
++	// Add [524c] identifier
++	versionStr = versionStr + " [524c]"
++
++	version := base(" " + versionStr)
+ 
+ 	content := open + code
+ 	if m.width > 40 {

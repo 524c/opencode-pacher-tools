@@ -1,0 +1,186 @@
+diff --git a/packages/opencode/src/session/message-v2.ts b/packages/opencode/src/session/message-v2.ts
+index 8dc059ca..f45280ae 100644
+--- a/packages/opencode/src/session/message-v2.ts
++++ b/packages/opencode/src/session/message-v2.ts
+@@ -39,6 +39,18 @@ export namespace MessageV2 {
+     ref: "PatchPart",
+   })
+   export type PatchPart = z.infer<typeof PatchPart>
++  // PATCH: agents-md-enforcement @ OpenCode v0.15.6
++  // Define RulesPart message type for pinned conversation rules (AGENTS.md preservation)
++  export const RulesPart = PartBase.extend({
++    type: z.literal("rules"),
++    rules: z.string(),
++    source: z.string(),
++    pinned: z.boolean(),
++    hash: z.string(),
++  }).meta({
++    ref: "RulesPart",
++  })
++  export type RulesPart = z.infer<typeof RulesPart>
+ 
+   export const TextPart = PartBase.extend({
+     type: z.literal("text"),
+@@ -255,6 +267,9 @@ export namespace MessageV2 {
+       SnapshotPart,
+       PatchPart,
+       AgentPart,
++      // PATCH: agents-md-enforcement @ OpenCode v0.15.6
++      // Add RulesPart to union of message part types
++      RulesPart,
+     ])
+     .meta({
+       ref: "Part",
+@@ -498,6 +513,15 @@ export namespace MessageV2 {
+                 },
+               ]
+             // text/plain and directory files are converted into text parts, ignore them
++            // PATCH: agents-md-enforcement @ OpenCode v0.15.6
++            // Convert RulesPart to text format for model consumption
++            if (part.type === "rules")
++              return [
++                {
++                  type: "text",
++                  text: part.rules,
++                },
++              ]
+             if (part.type === "file" && part.mime !== "text/plain" && part.mime !== "application/x-directory")
+               return [
+                 {
+@@ -596,6 +620,15 @@ export namespace MessageV2 {
+   export function filterSummarized(msgs: { info: MessageV2.Info; parts: MessageV2.Part[] }[]) {
+     const i = msgs.findLastIndex((m) => m.info.role === "assistant" && !!m.info.summary)
+     if (i === -1) return msgs.slice()
+-    return msgs.slice(i)
++
++    // PATCH: agents-md-enforcement @ OpenCode v0.15.6
++    // Preserve pinned RulesPart messages through summarization
++    // Extract messages with pinned rules BEFORE summary
++    const pinnedRulesMessages = msgs
++      .slice(0, i)
++      .filter((msg) => msg.parts.some((part) => part.type === "rules" && (part as any).pinned))
++
++    // Return pinned rules + messages after summary
++    return [...pinnedRulesMessages, ...msgs.slice(i)]
+   }
+ }
+diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/session/prompt.ts
+index 479980ac..0a3dd52f 100644
+--- a/packages/opencode/src/session/prompt.ts
++++ b/packages/opencode/src/session/prompt.ts
+@@ -404,12 +404,22 @@ export namespace SessionPrompt {
+     system.push(
+       ...(() => {
+         if (input.system) return [input.system]
+-        if (input.agent.prompt) return [input.agent.prompt]
++        // PATCH: agents-md-enforcement @ OpenCode v0.15.6
++        // Disable agent prompt injection via system prompt (moved to conversation-based injection)
++        // NOTE: Custom agent prompts (e.g., coder.md, k8s.md, diagnostic.md, planner.md) are now
++        // injected as RulesPart messages in conversation context instead of system prompts. This
++        // ensures agent-specific rules remain visible and survive summarization cycles.
++        // if (input.agent.prompt) return [input.agent.prompt]
+         return SystemPrompt.provider(input.modelID)
+       })(),
+     )
+     system.push(...(await SystemPrompt.environment()))
+-    system.push(...(await SystemPrompt.custom()))
++    // PATCH: agents-md-enforcement @ OpenCode v0.15.6
++    // Disable system prompt injection for AGENTS.md (moved to conversation-based injection)
++    // NOTE: AGENTS.md injection via system prompt is disabled in favor of conversation-based injection.
++    // This ensures rules remain visible in conversation context through summarization cycles.
++    // The RulesPart mechanism injects AGENTS.md as a pinned conversation message instead.
++    // system.push(...(await SystemPrompt.custom()))
+     // max 2 system prompt messages for caching purposes
+     const [first, ...rest] = system
+     system = [first, rest.join("\n")]
+@@ -766,6 +776,90 @@ export namespace SessionPrompt {
+       }),
+     ).then((x) => x.flat())
+ 
++    // PATCH: agents-md-enforcement @ OpenCode v0.15.6
++    // Inject AGENTS.md and current agent as RulesPart (conversation-based injection)
++    // This ensures both project-level rules (AGENTS.md) and agent-specific rules (coder.md, k8s.md, etc.)
++    // remain visible in conversation context and survive summarization cycles.
++    const existingMessages = await Session.messages(input.sessionID)
++    const isFirstMessage = existingMessages.filter((m) => m.info.role === "user").length === 0
++
++    // Detect agent switch by checking if AgentPart exists in input
++    const agentSwitch = input.parts?.find((p) => p.type === "agent")
++
++    // Get the current agent info
++    const currentAgent = await Agent.get(input.agent ?? "build")
++
++    if (isFirstMessage) {
++      // FIRST MESSAGE: Inject AGENTS.md
++      const customPrompts = await SystemPrompt.custom()
++      if (customPrompts.length > 0) {
++        const rulesText = customPrompts.join("\n\n---\n\n")
++        const hash = Bun.hash(rulesText).toString()
++
++        // Prepend AGENTS.md RulesPart at the beginning
++        parts.unshift({
++          id: Identifier.ascending("part"),
++          messageID: info.id,
++          sessionID: input.sessionID,
++          type: "rules",
++          rules: rulesText,
++          source: "AGENTS.md",
++          pinned: true,
++          hash,
++        } as any)
++      }
++
++      // FIRST MESSAGE: Inject current agent prompt (if exists)
++      if (currentAgent.prompt) {
++        const agentHash = Bun.hash(currentAgent.prompt).toString()
++        const agentSource = `agent-${currentAgent.name}`
++
++        parts.unshift({
++          id: Identifier.ascending("part"),
++          messageID: info.id,
++          sessionID: input.sessionID,
++          type: "rules",
++          rules: currentAgent.prompt,
++          source: agentSource, // e.g., "agent-coder", "agent-k8s"
++          pinned: true,
++          hash: agentHash,
++        } as any)
++      }
++    } else if (agentSwitch) {
++      // AGENT SWITCH DETECTED: Inject new agent prompt (if exists and different from last)
++      // Get last agent from message history
++      const lastAgentRules = existingMessages
++        .flatMap((m) => m.parts)
++        .filter((p) => p.type === "rules" && p.source.startsWith("agent-"))
++        .pop()
++
++      const currentAgentSource = `agent-${currentAgent.name}`
++
++      // If switched to a different agent and new agent has prompt, inject it
++      if (lastAgentRules?.source !== currentAgentSource && currentAgent.prompt) {
++        const agentHash = Bun.hash(currentAgent.prompt).toString()
++
++        // Avoid duplicates: check if this exact prompt already exists
++        const existingHashes = existingMessages
++          .flatMap((m) => m.parts)
++          .filter((p) => p.type === "rules")
++          .map((p) => p.hash)
++
++        if (!existingHashes.includes(agentHash)) {
++          parts.unshift({
++            id: Identifier.ascending("part"),
++            messageID: info.id,
++            sessionID: input.sessionID,
++            type: "rules",
++            rules: currentAgent.prompt,
++            source: currentAgentSource,
++            pinned: true,
++            hash: agentHash,
++          } as any)
++        }
++      }
++    }
++
+     await Plugin.trigger(
+       "chat.message",
+       {},

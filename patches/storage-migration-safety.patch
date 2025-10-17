@@ -1,0 +1,57 @@
+diff --git a/packages/opencode/src/storage/storage.ts b/packages/opencode/src/storage/storage.ts
+index e54fcd44..cf057773 100644
+--- a/packages/opencode/src/storage/storage.ts
++++ b/packages/opencode/src/storage/storage.ts
+@@ -124,14 +124,47 @@ export namespace Storage {
+       .json()
+       .then((x) => parseInt(x))
+       .catch(() => 0)
++    
++    // PATCH: storage-migration-safety @ OpenCode v0.15.6
++    // Run migrations sequentially with backup/rollback capability
+     for (let index = migration; index < MIGRATIONS.length; index++) {
+       log.info("running migration", { index })
+-      const migration = MIGRATIONS[index]
+-      await migration(dir).catch((e) => {
+-        log.error("failed to run migration", { error: e, index })
+-      })
+-      await Bun.write(path.join(dir, "migration"), (index + 1).toString())
++      const backupDir = path.join(dir, `../.backup-migration-${index}`)
++      
++      try {
++        // Step 1: Create backup before migration
++        await fs.cp(dir, backupDir, { recursive: true })
++        log.info("created migration backup", { index, backupDir })
++        
++        // Step 2: Run migration
++        const migrationFn = MIGRATIONS[index]
++        await migrationFn(dir)
++        
++        // Step 3: Update version marker
++        await Bun.write(path.join(dir, "migration"), (index + 1).toString())
++        log.info("migration completed successfully", { index })
++        
++        // Step 4: Cleanup backup after success
++        await fs.rm(backupDir, { recursive: true, force: true }).catch(() => {})
++        
++      } catch (error) {
++        log.error("migration failed, rolling back", { error, index })
++        
++        // Rollback: Restore from backup
++        try {
++          await fs.rm(dir, { recursive: true, force: true })
++          await fs.cp(backupDir, dir, { recursive: true })
++          await fs.rm(backupDir, { recursive: true, force: true })
++          log.info("migration rolled back successfully", { index })
++        } catch (rollbackError) {
++          log.error("CRITICAL: rollback failed", { error: rollbackError, index, backupDir })
++          throw new Error(`Migration ${index} failed and rollback also failed. Backup at: ${backupDir}`)
++        }
++        
++        throw new Error(`Migration ${index} failed and was rolled back: ${error}`)
++      }
+     }
++    
+     return {
+       dir,
+     }

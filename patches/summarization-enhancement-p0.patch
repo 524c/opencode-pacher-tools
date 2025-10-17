@@ -1,0 +1,59 @@
+diff --git a/packages/opencode/src/session/compaction.ts b/packages/opencode/src/session/compaction.ts
+index f9c5f363..14026c50 100644
+--- a/packages/opencode/src/session/compaction.ts
++++ b/packages/opencode/src/session/compaction.ts
+@@ -96,7 +96,8 @@ export namespace SessionCompaction {
+     const system = [
+       ...SystemPrompt.summarize(model.providerID),
+       ...(await SystemPrompt.environment()),
+-      ...(await SystemPrompt.custom()),
++      // SystemPrompt.custom() removed: AGENTS.md already preserved as RulesPart (prompt.ts:779-861)
++      // This eliminates 500-2000 token duplication per summarization
+     ]
+ 
+     const msg = (await Session.updateMessage({
+diff --git a/packages/opencode/src/session/prompt/summarize.txt b/packages/opencode/src/session/prompt/summarize.txt
+index 4751c8d7..1f1771a9 100644
+--- a/packages/opencode/src/session/prompt/summarize.txt
++++ b/packages/opencode/src/session/prompt/summarize.txt
+@@ -1,10 +1,32 @@
+-You are a helpful AI assistant tasked with summarizing conversations.
++You are summarizing a coding conversation to preserve critical context while reducing token count.
+ 
+-When asked to summarize, provide a detailed but concise summary of the conversation. 
+-Focus on information that would be helpful for continuing the conversation, including:
+-- What was done
+-- What is currently being worked on
+-- Which files are being modified
+-- What needs to be done next
++**CRITICAL RULES:**
++- Be EXTREMELY CONCISE (max 15 lines total)
++- Use bullet points, not prose
++- Focus on FACTS, not descriptions
++- Preserve file:line references (e.g., `prompt.ts:779`)
++- Include agent name if switched during conversation
++- List ONLY modified/working files
++- Capture concrete next steps
+ 
+-Your summary should be comprehensive enough to provide context but concise enough to be quickly understood.
++**Format:**
++```
++# Summary
++- [fact 1 with file:line]
++- [fact 2 with file:line]
++- Active Agent: [name]
++- Working: [files]
++- Next: [tasks]
++```
++
++**Example:**
++```
++# Summary
++- Extended agents-md-enforcement patch (prompt.ts:779-861) with RulesPart mechanism
++- Modified compaction to remove SystemPrompt.custom() duplication (compaction.ts:99)
++- Active Agent: coder
++- Working: compaction.ts, summarize.txt
++- Next: Test summarization, verify token reduction (~43%)
++```
++
++NO PROSE. NO EXPLANATIONS. JUST FACTS.

@@ -1,0 +1,101 @@
+diff --git a/packages/opencode/src/lsp/index.ts b/packages/opencode/src/lsp/index.ts
+index d811b237..aa844f3f 100644
+--- a/packages/opencode/src/lsp/index.ts
++++ b/packages/opencode/src/lsp/index.ts
+@@ -10,6 +10,42 @@ import { Instance } from "../project/instance"
+ export namespace LSP {
+   const log = Log.create({ service: "lsp" })
+ 
++  // PATCH: lsp-retry-mechanism @ OpenCode v0.15.6
++  // Retry mechanism for failed LSP servers with exponential backoff
++  interface BrokenServer {
++    key: string
++    failCount: number
++    lastAttempt: number
++    nextRetry: number
++  }
++
++  const brokenServers = new Map<string, BrokenServer>()
++
++  function shouldRetryServer(key: string): boolean {
++    const broken = brokenServers.get(key)
++    if (!broken) return true
++    if (broken.failCount >= 3) return false // Max 3 retries
++    return Date.now() >= broken.nextRetry
++  }
++
++  function markServerFailed(key: string) {
++    const existing = brokenServers.get(key)
++    const failCount = (existing?.failCount ?? 0) + 1
++    const backoff = Math.min(30000 * Math.pow(2, failCount - 1), 300000) // Max 5min
++    brokenServers.set(key, {
++      key,
++      failCount,
++      lastAttempt: Date.now(),
++      nextRetry: Date.now() + backoff,
++    })
++    log.info("LSP server marked as failed", {
++      key,
++      failCount,
++      nextRetryIn: `${backoff / 1000}s`,
++      permanent: failCount >= 3,
++    })
++  }
++
+   export const Range = z
+     .object({
+       start: z.object({
+@@ -94,8 +130,9 @@ export namespace LSP {
+           .join(", "),
+       })
+ 
++      // PATCH: lsp-retry-mechanism @ OpenCode v0.15.6
++      // Remove legacy broken Set (replaced by brokenServers Map with retry logic)
+       return {
+-        broken: new Set<string>(),
+         servers,
+         clients,
+       }
+@@ -119,7 +156,11 @@ export namespace LSP {
+       if (server.extensions.length && !server.extensions.includes(extension)) continue
+       const root = await server.root(file)
+       if (!root) continue
+-      if (s.broken.has(root + server.id)) continue
++      
++      // PATCH: lsp-retry-mechanism @ OpenCode v0.15.6
++      // Check retry status instead of simple broken Set
++      const serverKey = root + server.id
++      if (!shouldRetryServer(serverKey)) continue
+ 
+       const match = s.clients.find((x) => x.root === root && x.serverID === server.id)
+       if (match) {
+@@ -130,12 +171,16 @@ export namespace LSP {
+         .spawn(root)
+         .then((h) => {
+           if (h === undefined) {
+-            s.broken.add(root + server.id)
++            // PATCH: lsp-retry-mechanism @ OpenCode v0.15.6
++            // Use retry mechanism instead of permanent marking
++            markServerFailed(serverKey)
+           }
+           return h
+         })
+         .catch((err) => {
+-          s.broken.add(root + server.id)
++          // PATCH: lsp-retry-mechanism @ OpenCode v0.15.6
++          // Use retry mechanism instead of permanent marking
++          markServerFailed(serverKey)
+           log.error(`Failed to spawn LSP server ${server.id}`, { error: err })
+           return undefined
+         })
+@@ -147,7 +192,9 @@ export namespace LSP {
+         server: handle,
+         root,
+       }).catch((err) => {
+-        s.broken.add(root + server.id)
++        // PATCH: lsp-retry-mechanism @ OpenCode v0.15.6
++        // Use retry mechanism instead of permanent marking
++        markServerFailed(serverKey)
+         handle.process.kill()
+         log.error(`Failed to initialize LSP client ${server.id}`, { error: err })
+         return undefined

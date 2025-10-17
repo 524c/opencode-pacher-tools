@@ -1,0 +1,56 @@
+diff --git a/packages/opencode/src/config/config.ts b/packages/opencode/src/config/config.ts
+index 3bb608b0..2eaa62fa 100644
+--- a/packages/opencode/src/config/config.ts
++++ b/packages/opencode/src/config/config.ts
+@@ -547,6 +547,17 @@ export namespace Config {
+             error: "For custom LSP servers, 'extensions' array is required.",
+           },
+         ),
++      // PATCH: provider-blacklist-config @ OpenCode v0.15.6
++      // Add configurable model blacklist instead of hardcoded values
++      modelBlacklist: z
++        .array(
++          z.object({
++            provider: z.string().optional().describe("Provider ID (if omitted, applies to all providers)"),
++            model: z.string().describe("Model ID to blacklist"),
++          }),
++        )
++        .optional()
++        .describe("Models to exclude from provider listings"),
+       instructions: z.array(z.string()).optional().describe("Additional instruction files or patterns to include"),
+       layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
+       permission: z
+diff --git a/packages/opencode/src/provider/provider.ts b/packages/opencode/src/provider/provider.ts
+index 6e78ccbc..f6403ec9 100644
+--- a/packages/opencode/src/provider/provider.ts
++++ b/packages/opencode/src/provider/provider.ts
+@@ -352,14 +352,25 @@ export namespace Provider {
+       mergeProvider(providerID, provider.options ?? {}, "config")
+     }
+ 
++    // PATCH: provider-blacklist-config @ OpenCode v0.15.6
++    // Use configurable model blacklist instead of hardcoded values
++    const config = await Config.get()
++    const blacklist = config.modelBlacklist ?? [
++      // Default blacklist (maintains existing behavior if not configured)
++      { model: "gpt-5-chat-latest" },
++      { provider: "openrouter", model: "openai/gpt-5-chat" },
++    ]
++
+     for (const [providerID, provider] of Object.entries(providers)) {
+       const filteredModels = Object.fromEntries(
+         Object.entries(provider.info.models)
+           // Filter out blacklisted models
+-          .filter(
+-            ([modelID]) =>
+-              modelID !== "gpt-5-chat-latest" && !(providerID === "openrouter" && modelID === "openai/gpt-5-chat"),
+-          )
++          .filter(([modelID]) => {
++            return !blacklist.some(
++              (entry) =>
++                entry.model === modelID && (!entry.provider || entry.provider === providerID),
++            )
++          })
+           // Filter out experimental models
+           .filter(
+             ([, model]) =>
