@@ -309,7 +309,7 @@ opencode_build() {
     }
 
     _progress_start "Applying patches..."
-    if cd "$OPENCODE_DIR" && OPENCODE_PATCHER_DIR="$OPENCODE_PATCHER_DIR" bun run "$PATCH_SCRIPT" apply >/dev/null 2>&1; then
+    if (cd "$OPENCODE_DIR" && OPENCODE_PATCHER_DIR="$OPENCODE_PATCHER_DIR" bun run "$PATCH_SCRIPT" apply) >/dev/null 2>&1; then
         _progress_stop "success" "Patches applied"
     else
         _progress_stop "error" "Failed to apply patches"
