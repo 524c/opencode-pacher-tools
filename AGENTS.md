@@ -34,6 +34,7 @@ This repository manages **patches for the official OpenCode repository**. It is 
 - ✅ `install-tools.zsh` - Tools installation script
 - ✅ `opencode-build.zsh` - Main build orchestrator
 - ✅ `opencode-build-wrapper.zsh` - Build wrapper
+- ✅ `patches.config.yaml` - Patch configuration (enabled/disabled state)
 - ✅ `.gitignore`, `.gitmodules` - Git configuration
 
 **Before Creating ANY File:**

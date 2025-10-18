@@ -19,10 +19,14 @@ This document serves as a **comprehensive instruction manual** for LLM agents to
 
 ## Patch Categories
 
+**All patches are independent** - no forced dependencies between patches. Apply any combination you need.
+
 ### 1. Conversation & Rules Preservation (3 patches)
 - `agents-md-enforcement.patch` - Core mechanism for rules preservation
 - `summarization-enhancement-p0.patch` - Reduces token waste, improves summary quality
 - `summarization-enhancement-p1.patch` - Preserves agent context across summarization
+
+**Conceptual relationship**: P0 and P1 enhance agents-md-enforcement by improving summarization quality, but they can be applied independently.
 
 ### 2. Performance & Reliability (2 patches)
 - `lsp-retry-mechanism.patch` - Auto-retry failed LSP servers
@@ -247,7 +251,7 @@ system.push(...(await SystemPrompt.environment()))
 
 **Add:**
 ```typescript
-// PATCH: agents-md-enforcement @ OpenCode v0.15.7
+// PATCH: agents-md-enforcement @ OpenCode v0.15.7 (updated)
 // Inject RulesPart on first user message to preserve rules through summarization
 const existingMessages = await Session.messages(input.sessionID)
 const isFirstMessage = existingMessages.filter((m) => m.info.role === "user").length === 0
@@ -272,6 +276,68 @@ if (isFirstMessage) {
   }
 }
 ```
+
+#### Step 6b: Detect Agent Switches Reliably
+
+**File:** `packages/opencode/src/session/prompt.ts`
+
+**Function:** Same as Step 6 (message creation function)
+
+**Location:** After isFirstMessage check, alongside rules injection logic
+
+**Concept:** Detect when the user switches agents to trigger rules re-injection, ensuring agent-specific rules are applied immediately.
+
+**Why This Matters:**
+- OpenCode allows multiple agents (e.g., `coder`, `k8s`, `diagnostic`)
+- Each agent can have custom rules in AGENTS.md
+- When switching agents, new agent-specific rules must be injected
+- Original approach checked for `AgentPart` in input (only detects explicit `@agent-name` syntax)
+- **Problem:** Misses agent switches via UI dropdown or implicit switching
+- **Solution:** Compare previous assistant message's `mode` field with current agent
+
+**Original Approach (Unreliable):**
+```typescript
+// Only detects explicit @agent-name syntax
+const agentSwitch = input.parts?.find((p) => p.type === "agent")
+```
+
+**New Approach (Reliable):**
+```typescript
+// PATCH: agents-md-enforcement @ OpenCode v0.15.7 (updated)
+// Detect agent switches by comparing previous mode with current agent
+// This catches ALL agent switches (UI dropdown, implicit, explicit)
+const lastAgentMode = existingMessages
+  .slice()
+  .reverse()
+  .find((m) => m.info.role === "assistant")
+  ?.info.mode
+
+// Agent switch detected if previous mode differs from current agent
+const agentSwitch = lastAgentMode && lastAgentMode !== (input.agent ?? "build")
+```
+
+**Why This Works Better:**
+- `msg.info.mode` tracks which agent sent each message
+- Vanilla OpenCode already uses this for agent tracking
+- Compares last assistant's agent with current input agent
+- Detects switches regardless of how user initiated them:
+  - UI dropdown: mode changes without AgentPart
+  - Explicit `@agent-name`: mode changes AND AgentPart present
+  - Implicit delegation: mode changes via agent handoff
+
+**Implementation Details:**
+1. Find last assistant message in conversation
+2. Extract its `info.mode` field (agent identifier)
+3. Compare with current `input.agent` (defaults to "build")
+4. If different → agent switch detected → re-inject rules
+
+**Edge Cases Handled:**
+- First message: no previous mode → no agent switch
+- Same agent: mode matches current → no re-injection
+- Explicit switch: AgentPart present → still detected via mode comparison
+- UI dropdown: no AgentPart → detected via mode comparison
+
+This approach aligns with vanilla OpenCode's agent tracking mechanism and is more robust than checking for AgentPart presence.
 
 ---
 
@@ -339,10 +405,13 @@ After regenerating the patch, verify:
 - [ ] filterSummarized preserves pinned rule messages
 - [ ] SystemPrompt.custom() is disabled with explanation comment
 - [ ] Rules are injected on first user message only
+- [ ] Agent switch detection uses `msg.info.mode` comparison (not AgentPart)
+- [ ] Agent detection compares last assistant mode with current input agent
 - [ ] Patch applies cleanly with `git apply --check`
 - [ ] OpenCode builds successfully after patch application
 - [ ] Test conversation: rules persist after summarization
 - [ ] Test long conversation: AGENTS.md rules remain visible after multiple summarization cycles
+- [ ] Test agent switching: rules re-injected when switching agents (via UI dropdown or explicit)
 
 ---
 
@@ -668,7 +737,7 @@ After regenerating the patch, verify:
 - `packages/opencode/src/session/compaction.ts` - Disables AGENTS.md redundancy
 - `packages/opencode/src/session/summarize.txt` - Structured summarization template
 
-**Dependencies:** Requires `agents-md-enforcement.patch` to be applied first.
+**Conceptual Dependency:** Works best with `agents-md-enforcement.patch` but applies independently. Without agents-md-enforcement, the AGENTS.md redundancy fix has no effect, but the structured summarization template still improves summary quality.
 
 ---
 
@@ -804,13 +873,14 @@ git diff --cached > ../patches/summarization-enhancement-p0.patch
 ```bash
 cd opencode
 git reset --hard
-# Apply prerequisite first
-git apply ../patches/agents-md-enforcement.patch
-# Then apply this patch
+# Apply this patch independently (no prerequisites required)
 git apply --check ../patches/summarization-enhancement-p0.patch
 git apply ../patches/summarization-enhancement-p0.patch
 bun install
 bun run build:macos-arm64
+
+# Note: For full functionality, apply agents-md-enforcement.patch first
+# But the patch applies cleanly without it
 ```
 
 ---
@@ -823,11 +893,10 @@ After regenerating the patch, verify:
 - [ ] Version marker comment is present
 - [ ] `summarize.txt` has new structured template
 - [ ] Template includes all mandatory sections (What We Did, Current State, Next Steps)
-- [ ] RulesPart mechanism exists (prerequisite from agents-md-enforcement.patch)
-- [ ] Patch applies cleanly with `git apply --check`
+- [ ] Patch applies cleanly with `git apply --check` (no prerequisites required)
 - [ ] OpenCode builds successfully after patch
 - [ ] Test summarization: produces structured output with all sections
-- [ ] Token count reduced: before ~3500, after ~2000 tokens
+- [ ] Token count reduced (if agents-md-enforcement also applied): before ~3500, after ~2000 tokens
 - [ ] Summary preserves critical context (files, agent, decisions)
 
 ---
@@ -851,7 +920,7 @@ After regenerating the patch, verify:
 **Files Modified:**
 - `packages/opencode/src/session/compaction.ts` - Detects and injects agent context
 
-**Dependencies:** Requires `summarization-enhancement-p0.patch` to be applied first.
+**Conceptual Dependency:** Works best with `summarization-enhancement-p0.patch` (structured template includes "Active Agent" field), but applies independently. Without P0, agent context is still injected but may not appear in a structured section.
 
 ---
 
@@ -999,14 +1068,14 @@ git diff --cached > ../patches/summarization-enhancement-p1.patch
 ```bash
 cd opencode
 git reset --hard
-# Apply prerequisites first
-git apply ../patches/agents-md-enforcement.patch
-git apply ../patches/summarization-enhancement-p0.patch
-# Then apply this patch
+# Apply this patch independently (no prerequisites required)
 git apply --check ../patches/summarization-enhancement-p1.patch
 git apply ../patches/summarization-enhancement-p1.patch
 bun install
 bun run build:macos-arm64
+
+# Note: For full functionality, apply P0 first (structured template)
+# But the patch applies cleanly without it
 ```
 
 ---
@@ -1020,11 +1089,11 @@ After regenerating the patch, verify:
 - [ ] Detection checks for agent mentions in assistant text
 - [ ] Agent context is appended to summarization message content
 - [ ] Version marker comments are present
-- [ ] Structured prompt exists with "Active Agent" field (P0 prerequisite)
-- [ ] Patch applies cleanly after P0 patch
-- [ ] OpenCode builds successfully after both patches
-- [ ] Test summarization: output includes "**Active Agent:** [agent-name]" in Current State
-- [ ] Test agent delegation: agent context preserved after summarization
+- [ ] Patch applies cleanly with `git apply --check` (no prerequisites required)
+- [ ] OpenCode builds successfully after patch
+- [ ] Test summarization: agent context injected into prompt
+- [ ] Test with P0: output includes "**Active Agent:** [agent-name]" in Current State section
+- [ ] Test without P0: agent context still injected but may not appear in structured format
 
 ---
 
@@ -1673,17 +1742,24 @@ After regenerating the patch, verify:
 
 ## Patch Application Order
 
-Some patches have dependencies. Apply in this order:
+**All patches are independent** - they apply cleanly in any order.
 
-1. `agents-md-enforcement.patch` (no dependencies)
-2. `commit-hash-footer.patch` (no dependencies)
-3. `summarization-enhancement-p0.patch` (requires agents-md-enforcement)
-4. `summarization-enhancement-p1.patch` (requires summarization-enhancement-p0)
-5. `lsp-retry-mechanism.patch` (no dependencies)
-6. `storage-migration-safety.patch` (no dependencies)
-7. `provider-blacklist-config.patch` (no dependencies)
+**Recommended order for full functionality:**
 
-The `tools/apply-all-patches.ts` script handles this automatically.
+1. `agents-md-enforcement.patch` - Core rules preservation mechanism
+2. `summarization-enhancement-p0.patch` - Builds on agents-md (removes AGENTS.md redundancy)
+3. `summarization-enhancement-p1.patch` - Builds on P0 (uses structured template's "Active Agent" field)
+4. Any other patches (truly independent)
+
+**Why this order?**
+- P0 removes AGENTS.md injection during summarization (only useful if agents-md-enforcement preserves it elsewhere)
+- P1 injects agent context into summarization (best formatted if P0's structured template exists)
+
+**Can you apply them in different order?** Yes! Each patch applies independently. You'll just lose some synergy:
+- P0 without agents-md-enforcement: Template works, but AGENTS.md redundancy fix has no effect
+- P1 without P0: Agent context injected, but may not appear in a structured "Active Agent" field
+
+The `tools/apply-all-patches.ts` script respects the `enabled` flag in `patches.config.yaml` and applies patches in the recommended order.
 
 ---
 
