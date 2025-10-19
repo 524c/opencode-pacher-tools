@@ -108,22 +108,67 @@ This project uses a **custom macOS ARM64 build script** (`tools/build-macos-arm6
 
 ## Patches
 
-**7 patches** organized by category:
+**6 patches** organized by category. All patches are **independent** and can be enabled/disabled individually.
 
-### Conversation & Rules Preservation (3)
-- agents-md-enforcement.patch
-- summarization-enhancement-p0.patch
-- summarization-enhancement-p1.patch
+### Patch Management
 
-### Performance & Reliability (2)
-- lsp-retry-mechanism.patch
-- storage-migration-safety.patch
+```bash
+# List all patches grouped by category
+bun run tools/apply-all-patches.ts list
 
-### Configuration & Flexibility (1)
-- provider-blacklist-config.patch
+# List patches in specific category
+bun run tools/apply-all-patches.ts list --category conversation
 
-### Developer Experience (1)
-- commit-hash-footer.patch
+# Show detailed status of all patches
+bun run tools/apply-all-patches.ts status
+
+# Show status for specific category
+bun run tools/apply-all-patches.ts status --category performance
+
+# Enable specific patch
+bun run tools/apply-all-patches.ts enable --patch lsp-retry-mechanism
+
+# Disable specific patch
+bun run tools/apply-all-patches.ts disable --patch commit-hash-footer
+
+# Apply only enabled patches (default during build)
+bun run tools/apply-all-patches.ts apply
+
+# Apply patches from specific category
+bun run tools/apply-all-patches.ts apply --category performance
+
+# Force apply all patches (ignore enabled flag)
+bun run tools/apply-all-patches.ts apply --all
+```
+
+### Available Patches
+
+**All patches are independent** - no forced dependencies. Apply any combination you need.
+
+#### Conversation & Rules Preservation (2)
+- **agents-md-enforcement** - AGENTS.md rules survive conversation summarization
+- **summarization-enhancement-p0** - Critical summarization improvements for token efficiency
+
+#### Performance & Reliability (2)
+- **lsp-retry-mechanism** - Automatic retry for LSP server failures with exponential backoff
+- **storage-migration-safety** - Automatic backup before storage migrations
+
+#### Configuration & Flexibility (1)
+- **provider-blacklist-config** - Flexible provider filtering via configuration
+
+#### Developer Experience (1)
+- **commit-hash-footer** - Display commit hash in TUI footer
+
+### Configuration File
+
+Patches are configured in `patches.config.yaml` at the root of the repository. Each patch has:
+- **id**: Unique identifier matching patch filename
+- **enabled**: Whether to apply during build (true/false)
+- **category**: Organization category (conversation/performance/config/developer-experience)
+- **description**: Human-readable patch purpose
+- **checkApplied**: Validation patterns to verify patch application
+
+**Independent Architecture**: All patches apply cleanly regardless of which other patches are enabled.
 
 **See `PATCHES.md` for detailed patch descriptions.** Technical regeneration instructions in `patches/README.md`.
 

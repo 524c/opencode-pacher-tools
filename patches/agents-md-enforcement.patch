@@ -65,7 +65,7 @@ index 8dc059ca..f45280ae 100644
    }
  }
 diff --git a/packages/opencode/src/session/prompt.ts b/packages/opencode/src/session/prompt.ts
-index 479980ac..0a3dd52f 100644
+index 29940dda..e605ac15 100644
 --- a/packages/opencode/src/session/prompt.ts
 +++ b/packages/opencode/src/session/prompt.ts
 @@ -404,12 +404,22 @@ export namespace SessionPrompt {
@@ -93,7 +93,7 @@ index 479980ac..0a3dd52f 100644
      // max 2 system prompt messages for caching purposes
      const [first, ...rest] = system
      system = [first, rest.join("\n")]
-@@ -766,6 +776,90 @@ export namespace SessionPrompt {
+@@ -766,6 +776,99 @@ export namespace SessionPrompt {
        }),
      ).then((x) => x.flat())
  
@@ -104,8 +104,17 @@ index 479980ac..0a3dd52f 100644
 +    const existingMessages = await Session.messages(input.sessionID)
 +    const isFirstMessage = existingMessages.filter((m) => m.info.role === "user").length === 0
 +
-+    // Detect agent switch by checking if AgentPart exists in input
-+    const agentSwitch = input.parts?.find((p) => p.type === "agent")
++    // PATCH: agents-md-enforcement @ OpenCode v0.15.6 (updated)
++    // Detect agent switch by comparing current agent with last assistant message's mode
++    // This approach aligns with vanilla OpenCode's agent tracking mechanism (msg.info.mode)
++    // and reliably detects ALL agent switches (UI dropdown, implicit switches, @agent-name syntax)
++    const lastAgentMode = existingMessages
++      .slice()
++      .reverse()
++      .find((m) => m.info.role === "assistant")
++      ?.info.mode
++    
++    const agentSwitch = lastAgentMode && lastAgentMode !== (input.agent ?? "build")
 +
 +    // Get the current agent info
 +    const currentAgent = await Agent.get(input.agent ?? "build")

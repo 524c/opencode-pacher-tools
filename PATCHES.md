@@ -19,10 +19,13 @@ This document serves as a **comprehensive instruction manual** for LLM agents to
 
 ## Patch Categories
 
-### 1. Conversation & Rules Preservation (3 patches)
+**All patches are independent** - no forced dependencies between patches. Apply any combination you need.
+
+### 1. Conversation & Rules Preservation (2 patches)
 - `agents-md-enforcement.patch` - Core mechanism for rules preservation
 - `summarization-enhancement-p0.patch` - Reduces token waste, improves summary quality
-- `summarization-enhancement-p1.patch` - Preserves agent context across summarization
+
+**Conceptual relationship**: P0 enhances agents-md-enforcement by improving summarization quality, but can be applied independently.
 
 ### 2. Performance & Reliability (2 patches)
 - `lsp-retry-mechanism.patch` - Auto-retry failed LSP servers
@@ -247,7 +250,7 @@ system.push(...(await SystemPrompt.environment()))
 
 **Add:**
 ```typescript
-// PATCH: agents-md-enforcement @ OpenCode v0.15.7
+// PATCH: agents-md-enforcement @ OpenCode v0.15.7 (updated)
 // Inject RulesPart on first user message to preserve rules through summarization
 const existingMessages = await Session.messages(input.sessionID)
 const isFirstMessage = existingMessages.filter((m) => m.info.role === "user").length === 0
@@ -272,6 +275,68 @@ if (isFirstMessage) {
   }
 }
 ```
+
+#### Step 6b: Detect Agent Switches Reliably
+
+**File:** `packages/opencode/src/session/prompt.ts`
+
+**Function:** Same as Step 6 (message creation function)
+
+**Location:** After isFirstMessage check, alongside rules injection logic
+
+**Concept:** Detect when the user switches agents to trigger rules re-injection, ensuring agent-specific rules are applied immediately.
+
+**Why This Matters:**
+- OpenCode allows multiple agents (e.g., `coder`, `k8s`, `diagnostic`)
+- Each agent can have custom rules in AGENTS.md
+- When switching agents, new agent-specific rules must be injected
+- Original approach checked for `AgentPart` in input (only detects explicit `@agent-name` syntax)
+- **Problem:** Misses agent switches via UI dropdown or implicit switching
+- **Solution:** Compare previous assistant message's `mode` field with current agent
+
+**Original Approach (Unreliable):**
+```typescript
+// Only detects explicit @agent-name syntax
+const agentSwitch = input.parts?.find((p) => p.type === "agent")
+```
+
+**New Approach (Reliable):**
+```typescript
+// PATCH: agents-md-enforcement @ OpenCode v0.15.7 (updated)
+// Detect agent switches by comparing previous mode with current agent
+// This catches ALL agent switches (UI dropdown, implicit, explicit)
+const lastAgentMode = existingMessages
+  .slice()
+  .reverse()
+  .find((m) => m.info.role === "assistant")
+  ?.info.mode
+
+// Agent switch detected if previous mode differs from current agent
+const agentSwitch = lastAgentMode && lastAgentMode !== (input.agent ?? "build")
+```
+
+**Why This Works Better:**
+- `msg.info.mode` tracks which agent sent each message
+- Vanilla OpenCode already uses this for agent tracking
+- Compares last assistant's agent with current input agent
+- Detects switches regardless of how user initiated them:
+  - UI dropdown: mode changes without AgentPart
+  - Explicit `@agent-name`: mode changes AND AgentPart present
+  - Implicit delegation: mode changes via agent handoff
+
+**Implementation Details:**
+1. Find last assistant message in conversation
+2. Extract its `info.mode` field (agent identifier)
+3. Compare with current `input.agent` (defaults to "build")
+4. If different → agent switch detected → re-inject rules
+
+**Edge Cases Handled:**
+- First message: no previous mode → no agent switch
+- Same agent: mode matches current → no re-injection
+- Explicit switch: AgentPart present → still detected via mode comparison
+- UI dropdown: no AgentPart → detected via mode comparison
+
+This approach aligns with vanilla OpenCode's agent tracking mechanism and is more robust than checking for AgentPart presence.
 
 ---
 
@@ -339,10 +404,13 @@ After regenerating the patch, verify:
 - [ ] filterSummarized preserves pinned rule messages
 - [ ] SystemPrompt.custom() is disabled with explanation comment
 - [ ] Rules are injected on first user message only
+- [ ] Agent switch detection uses `msg.info.mode` comparison (not AgentPart)
+- [ ] Agent detection compares last assistant mode with current input agent
 - [ ] Patch applies cleanly with `git apply --check`
 - [ ] OpenCode builds successfully after patch application
 - [ ] Test conversation: rules persist after summarization
 - [ ] Test long conversation: AGENTS.md rules remain visible after multiple summarization cycles
+- [ ] Test agent switching: rules re-injected when switching agents (via UI dropdown or explicit)
 
 ---
 
@@ -668,7 +736,7 @@ After regenerating the patch, verify:
 - `packages/opencode/src/session/compaction.ts` - Disables AGENTS.md redundancy
 - `packages/opencode/src/session/summarize.txt` - Structured summarization template
 
-**Dependencies:** Requires `agents-md-enforcement.patch` to be applied first.
+**Conceptual Dependency:** Works best with `agents-md-enforcement.patch` but applies independently. Without agents-md-enforcement, the AGENTS.md redundancy fix has no effect, but the structured summarization template still improves summary quality.
 
 ---
 
@@ -804,13 +872,14 @@ git diff --cached > ../patches/summarization-enhancement-p0.patch
 ```bash
 cd opencode
 git reset --hard
-# Apply prerequisite first
-git apply ../patches/agents-md-enforcement.patch
-# Then apply this patch
+# Apply this patch independently (no prerequisites required)
 git apply --check ../patches/summarization-enhancement-p0.patch
 git apply ../patches/summarization-enhancement-p0.patch
 bun install
 bun run build:macos-arm64
+
+# Note: For full functionality, apply agents-md-enforcement.patch first
+# But the patch applies cleanly without it
 ```
 
 ---
@@ -823,208 +892,11 @@ After regenerating the patch, verify:
 - [ ] Version marker comment is present
 - [ ] `summarize.txt` has new structured template
 - [ ] Template includes all mandatory sections (What We Did, Current State, Next Steps)
-- [ ] RulesPart mechanism exists (prerequisite from agents-md-enforcement.patch)
-- [ ] Patch applies cleanly with `git apply --check`
+- [ ] Patch applies cleanly with `git apply --check` (no prerequisites required)
 - [ ] OpenCode builds successfully after patch
 - [ ] Test summarization: produces structured output with all sections
-- [ ] Token count reduced: before ~3500, after ~2000 tokens
+- [ ] Token count reduced (if agents-md-enforcement also applied): before ~3500, after ~2000 tokens
 - [ ] Summary preserves critical context (files, agent, decisions)
-
----
-
-## summarization-enhancement-p1.patch
-
-### 🎯 Problem & Solution
-
-**Problem:**
-- OpenCode's summarization doesn't detect or mention which agent was active during conversation
-- When conversation is summarized, **active agent context is lost**
-- Example: User delegates K8s task to K8s agent → conversation summarized → agent context lost
-- Result: **Delegation confusion** and **context fragmentation**
-
-**Solution:**
-- **Phase 2: Inject active agent context into summarization**
-- Detect which agent is currently active in the session
-- Inject agent name as additional context in summarization prompt
-- Ensure summary explicitly mentions "Active Agent: [agent-name]"
-
-**Files Modified:**
-- `packages/opencode/src/session/compaction.ts` - Detects and injects agent context
-
-**Dependencies:** Requires `summarization-enhancement-p0.patch` to be applied first.
-
----
-
-### 📐 Implementation Strategy
-
-The patch modifies OpenCode's summarization in **two conceptual areas**:
-
-#### 1. Detect Active Agent from Conversation History
-
-**Concept:** Scan recent messages to identify which agent is currently active in the conversation.
-
-**Location:** `packages/opencode/src/session/compaction.ts` - `compact()` function (before summarization message construction, around line 135)
-
-**Logic:**
-- Scan last 10 messages (most recent context)
-- Check for AgentPart in user messages (explicit agent switch)
-- Check for agent mentions in assistant text (delegation patterns)
-- Capture agent name dynamically from conversation content
-
-#### 2. Inject Agent Context into Summarization Prompt
-
-**Concept:** Append detected agent context to the summarization request to ensure AI mentions agent in summary.
-
-**Location:** `packages/opencode/src/session/compaction.ts` - `compact()` function (summarization user message construction, around line 155)
-
-**Logic:** Append agent context string to standard summarization request
-
----
-
-### 🔧 Detailed Implementation Instructions
-
-#### Step 1: Add Agent Context Detection
-
-**File:** `packages/opencode/src/session/compaction.ts`
-
-**Function:** `compact()`
-
-**Location:** After MessageV2.TextPart creation, before summarization message construction (around line 135)
-
-**Add:**
-```typescript
-// PATCH: summarization-enhancement-p1 @ OpenCode v0.15.7
-// Detect active agent from conversation history to preserve agent context in summary
-// This ensures agent-specific work is properly captured during summarization
-let agentContext = ""
-for (const msg of toSummarize.slice(-10).reverse()) {
-  // Check for AgentPart in message parts (user switched agents explicitly)
-  if (msg.info.role === "user" && msg.parts) {
-    const agentPart = msg.parts.find((p: any) => p.type === "agent")
-    if (agentPart) {
-      agentContext = `\n\nIMPORTANT CONTEXT: The user switched to the '${(agentPart as any).name}' agent during this conversation. This agent specializes in specific tasks and may have different capabilities than the default agent. Ensure your summary mentions this agent switch and any agent-specific work performed.`
-      break
-    }
-  }
-  // Check for agent mentions in text parts (delegation patterns)
-  if (msg.info.role === "assistant" && msg.parts) {
-    for (const part of msg.parts) {
-      if (part.type === "text" && typeof part.text === "string") {
-        // Look for common agent delegation patterns
-        const agentMentions = part.text.match(/(?:delegat(?:ed|ing) to|switched to|using|calling) (?:the )?([a-z0-9-]+) agent/i)
-        if (agentMentions) {
-          agentContext = `\n\nIMPORTANT CONTEXT: The conversation involved delegation to the '${agentMentions[1]}' agent. This agent has specialized capabilities and may have performed domain-specific tasks. Ensure your summary captures which tasks were handled by this agent.`
-          break
-        }
-      }
-    }
-    if (agentContext) break
-  }
-}
-```
-
-#### Step 2: Inject Agent Context into Summarization Message
-
-**File:** `packages/opencode/src/session/compaction.ts`
-
-**Function:** `compact()`
-
-**Location:** Summarization user message construction (around line 155)
-
-**Find:**
-```typescript
-{
-  role: "user",
-  content: [
-    {
-      type: "text",
-      text: `Provide a detailed but concise summary of our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next.`,
-    },
-  ],
-},
-```
-
-**Replace with:**
-```typescript
-{
-  role: "user",
-  content: [
-    {
-      type: "text",
-      // PATCH: summarization-enhancement-p1 @ OpenCode v0.15.7
-      // Append agent context to ensure AI includes agent information in summary
-      text: `Provide a detailed but concise summary of our conversation above. Focus on information that would be helpful for continuing the conversation, including what we did, what we're doing, which files we're working on, and what we're going to do next.${agentContext}`,
-    },
-  ],
-},
-```
-
----
-
-### 🔍 How to Regenerate This Patch
-
-#### Analysis Phase
-
-```bash
-cd opencode
-
-# Check compaction logic
-grep -n "toSummarize.map" packages/opencode/src/session/compaction.ts
-
-# Check session structure
-grep -n "agentID" packages/opencode/src/session/session.ts
-
-# Verify structured prompt exists (prerequisite)
-grep -n "Active Agent" packages/opencode/src/session/summarize.txt
-```
-
-#### Implementation Phase
-
-1. Find the `compact()` function in compaction.ts
-2. Locate where summarization message is constructed (around line 106)
-3. Before `toSummarize.map()`, add agent context detection code
-4. Append `agentContext` to summarization message content
-5. Add version marker comments
-
-#### Patch Generation
-
-```bash
-cd opencode
-git add -A
-git diff --cached > ../patches/summarization-enhancement-p1.patch
-```
-
-#### Testing
-
-```bash
-cd opencode
-git reset --hard
-# Apply prerequisites first
-git apply ../patches/agents-md-enforcement.patch
-git apply ../patches/summarization-enhancement-p0.patch
-# Then apply this patch
-git apply --check ../patches/summarization-enhancement-p1.patch
-git apply ../patches/summarization-enhancement-p1.patch
-bun install
-bun run build:macos-arm64
-```
-
----
-
-### 🧪 Validation Checklist
-
-After regenerating the patch, verify:
-
-- [ ] Agent context detection code is present in compaction.ts
-- [ ] Detection checks for AgentPart in user messages
-- [ ] Detection checks for agent mentions in assistant text
-- [ ] Agent context is appended to summarization message content
-- [ ] Version marker comments are present
-- [ ] Structured prompt exists with "Active Agent" field (P0 prerequisite)
-- [ ] Patch applies cleanly after P0 patch
-- [ ] OpenCode builds successfully after both patches
-- [ ] Test summarization: output includes "**Active Agent:** [agent-name]" in Current State
-- [ ] Test agent delegation: agent context preserved after summarization
 
 ---
 
@@ -1673,17 +1545,21 @@ After regenerating the patch, verify:
 
 ## Patch Application Order
 
-Some patches have dependencies. Apply in this order:
+**All patches are independent** - they apply cleanly in any order.
 
-1. `agents-md-enforcement.patch` (no dependencies)
-2. `commit-hash-footer.patch` (no dependencies)
-3. `summarization-enhancement-p0.patch` (requires agents-md-enforcement)
-4. `summarization-enhancement-p1.patch` (requires summarization-enhancement-p0)
-5. `lsp-retry-mechanism.patch` (no dependencies)
-6. `storage-migration-safety.patch` (no dependencies)
-7. `provider-blacklist-config.patch` (no dependencies)
+**Recommended order for full functionality:**
 
-The `tools/apply-all-patches.ts` script handles this automatically.
+1. `agents-md-enforcement.patch` - Core rules preservation mechanism
+2. `summarization-enhancement-p0.patch` - Builds on agents-md (removes AGENTS.md redundancy)
+3. Any other patches (truly independent)
+
+**Why this order?**
+- P0 removes AGENTS.md injection during summarization (only useful if agents-md-enforcement preserves it elsewhere)
+
+**Can you apply them in different order?** Yes! Each patch applies independently. You'll just lose some synergy:
+- P0 without agents-md-enforcement: Template works, but AGENTS.md redundancy fix has no effect
+
+The `tools/apply-all-patches.ts` script respects the `enabled` flag in `patches.config.yaml` and applies patches in the recommended order.
 
 ---
 

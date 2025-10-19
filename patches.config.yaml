@@ -1,0 +1,92 @@
+patches:
+  - id: lsp-retry-mechanism
+    name: LSP Retry Mechanism
+    file: lsp-retry-mechanism.patch
+    description: Automatic retry for LSP server failures with exponential backoff
+    category: performance
+    enabled: false
+    dependencies: []
+    checkApplied:
+      type: grep
+      files:
+        - path: packages/opencode/src/lsp/index.ts
+          patterns:
+            - interface BrokenServer
+            - failureCount
+            - lastAttempt
+
+  - id: commit-hash-footer
+    name: Commit Hash Footer
+    file: commit-hash-footer.patch
+    description: Display commit hash in TUI footer
+    category: developer-experience
+    enabled: true
+    dependencies: []
+    checkApplied:
+      type: grep
+      files:
+        - path: packages/tui/cmd/opencode/main.go
+          patterns:
+            - "var CommitHash = "
+        - path: packages/tui/internal/app/app.go
+          patterns:
+            - CommitHash.*string
+
+  - id: agents-md-enforcement
+    name: AGENTS.md Rules Enforcement
+    file: agents-md-enforcement.patch
+    description: AGENTS.md rules survive conversation summarization
+    category: conversation
+    enabled: false
+    dependencies: []
+    checkApplied:
+      type: grep
+      files:
+        - path: packages/opencode/src/session/message-v2.ts
+          patterns:
+            - export type RulesPart
+            - pinnedRulesMessages
+
+  - id: storage-migration-safety
+    name: Storage Migration Safety
+    file: storage-migration-safety.patch
+    description: Automatic backup before storage migrations
+    category: performance
+    enabled: false
+    dependencies: []
+    checkApplied:
+      type: grep
+      files:
+        - path: packages/opencode/src/storage/storage.ts
+          patterns:
+            - "PATCH: storage-migration-safety"
+            - backupDir
+
+  - id: provider-blacklist-config
+    name: Provider Blacklist Configuration
+    file: provider-blacklist-config.patch
+    description: Flexible provider filtering via configuration
+    category: configuration
+    enabled: false
+    dependencies: []
+    checkApplied:
+      type: grep
+      files:
+        - path: packages/opencode/src/config/config.ts
+          patterns:
+            - "PATCH: provider-blacklist-config"
+            - modelBlacklist
+
+categories:
+  conversation:
+    name: Conversation & Rules Preservation
+    description: Patches that enhance conversation quality and rule persistence
+  performance:
+    name: Performance & Reliability
+    description: Patches that improve system performance and reliability
+  configuration:
+    name: Configuration & Flexibility
+    description: Patches that add configuration options
+  developer-experience:
+    name: Developer Experience
+    description: Patches that improve developer workflow
