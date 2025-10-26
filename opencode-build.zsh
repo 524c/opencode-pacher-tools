@@ -249,10 +249,8 @@ opencode_build() {
             git remote add sst https://github.com/sst/opencode 2>/dev/null || exit 1
         }
 
-        # Stash any local changes
-        git diff-index --quiet HEAD -- || {
-            git stash push -m "opencode-build: auto-stash before sync" >/dev/null 2>&1
-        }
+        # Clean ALL modifications first (including previously applied patches)
+        git reset --hard HEAD >/dev/null 2>&1 || exit 1
 
         # Fetch tags for release mode detection
         git fetch sst --tags 2>/dev/null || exit 1
@@ -309,7 +307,7 @@ opencode_build() {
     }
 
     _progress_start "Applying patches..."
-    if (cd "$OPENCODE_DIR" && OPENCODE_PATCHER_DIR="$OPENCODE_PATCHER_DIR" bun run "$PATCH_SCRIPT" apply) >/dev/null 2>&1; then
+    if (OPENCODE_PATCHER_DIR="$OPENCODE_PATCHER_DIR" bun run "$PATCH_SCRIPT" apply) >/dev/null 2>&1; then
         _progress_stop "success" "Patches applied"
     else
         _progress_stop "error" "Failed to apply patches"
@@ -357,6 +355,14 @@ opencode_build() {
     fi
     
     _progress_stop "success" "Build complete"
+
+    # Clean up opencode submodule (reset to clean state after build)
+    (
+        cd "$OPENCODE_DIR" || return 1
+        git reset --hard HEAD >/dev/null 2>&1
+    ) || {
+        echo "⚠ Warning: Failed to reset opencode submodule to clean state" >&2
+    }
 
     # PWD and OLDPWD are already preserved - no cd was done in main shell!
     return $return_code

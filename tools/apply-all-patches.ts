@@ -466,7 +466,7 @@ async function main() {
     }
   }
 
-  // Check if we're in a git repository
+  // Check if we're in a git repository (file or directory)
   if (!existsSync(".git")) {
     console.error("Not in a git repository");
     console.error("Please run from OpenCode root directory");

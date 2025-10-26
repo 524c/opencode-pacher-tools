@@ -48,20 +48,28 @@ main() {
     copy_if_different "$REPO_DIR/opencode-build.zsh" "$TOOLS_DIR/opencode-build.zsh"
     chmod +x "$TOOLS_DIR/opencode-build.zsh"
 
+    # Copy package.json and install dependencies
+    copy_if_different "$REPO_DIR/package.json" "$TOOLS_DIR/package.json"
+    
+    # Install dependencies in tools directory
+    (cd "$TOOLS_DIR" && bun install --silent) >/dev/null 2>&1
+
+    # Copy patch configuration
+    copy_if_different "$REPO_DIR/patches.config.yaml" "$TOOLS_DIR/patches.config.yaml"
+
     # Copy patch tools (survives git reset --hard)
     mkdir -p "$TOOLS_DIR/tools"
-    copy_if_different "$REPO_DIR/tools/apply-agents-patch.ts" "$TOOLS_DIR/tools/apply-agents-patch.ts"
-    copy_if_different "$REPO_DIR/tools/apply-all-patches.ts" "$TOOLS_DIR/tools/apply-all-patches.ts"
-    copy_if_different "$REPO_DIR/tools/apply-commit-hash-footer-patch.ts" "$TOOLS_DIR/tools/apply-commit-hash-footer-patch.ts"
+    for script in "$REPO_DIR/tools"/*.ts; do
+        [[ -f "$script" ]] && copy_if_different "$script" "$TOOLS_DIR/tools/$(basename "$script")"
+    done
 
-    # Copy patch files (survives git reset --hard)
+    # Copy all patch files (survives git reset --hard)
     mkdir -p "$TOOLS_DIR/patches"
-    copy_if_different "$REPO_DIR/patches/agents-md-enforcement.patch" "$TOOLS_DIR/patches/agents-md-enforcement.patch"
-    copy_if_different "$REPO_DIR/patches/commit-hash-footer.patch" "$TOOLS_DIR/patches/commit-hash-footer.patch"
-
-    # Copy build tools (survives git reset --hard)
-    copy_if_different "$REPO_DIR/tools/build-macos-arm64.ts" "$TOOLS_DIR/tools/build-macos-arm64.ts"
-    copy_if_different "$REPO_DIR/tools/build-all-platforms.ts" "$TOOLS_DIR/tools/build-all-platforms.ts"
+    for patch in "$REPO_DIR/patches"/*.patch; do
+        [[ -f "$patch" ]] && copy_if_different "$patch" "$TOOLS_DIR/patches/$(basename "$patch")"
+    done
+    # Copy patch documentation
+    [[ -f "$REPO_DIR/patches/README.md" ]] && copy_if_different "$REPO_DIR/patches/README.md" "$TOOLS_DIR/patches/README.md"
 
     # Initialize opencode git submodule
     if [[ ! -d "$TOOLS_DIR/opencode/.git" ]]; then

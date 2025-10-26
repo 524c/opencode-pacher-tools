@@ -14,7 +14,6 @@ patches:
             - interface BrokenServer
             - failureCount
             - lastAttempt
-
   - id: commit-hash-footer
     name: Commit Hash Footer
     file: commit-hash-footer.patch
@@ -31,7 +30,6 @@ patches:
         - path: packages/tui/internal/app/app.go
           patterns:
             - CommitHash.*string
-
   - id: agents-md-enforcement
     name: AGENTS.md Rules Enforcement
     file: agents-md-enforcement.patch
@@ -46,7 +44,6 @@ patches:
           patterns:
             - export type RulesPart
             - pinnedRulesMessages
-
   - id: storage-migration-safety
     name: Storage Migration Safety
     file: storage-migration-safety.patch
@@ -61,7 +58,6 @@ patches:
           patterns:
             - "PATCH: storage-migration-safety"
             - backupDir
-
   - id: provider-blacklist-config
     name: Provider Blacklist Configuration
     file: provider-blacklist-config.patch
@@ -76,7 +72,6 @@ patches:
           patterns:
             - "PATCH: provider-blacklist-config"
             - modelBlacklist
-
 categories:
   conversation:
     name: Conversation & Rules Preservation
