@@ -1,5 +1,17 @@
 {
+  "name": "opencode-patcher-tools",
+  "version": "1.0.0",
+  "description": "Patch and build management for customizing OpenCode",
+  "type": "module",
+  "scripts": {
+    "apply-patches": "bun tools/apply-all-patches.ts",
+    "build": "bun tools/build-macos-arm64.ts",
+    "build-all": "bun tools/build-all-platforms.ts"
+  },
   "dependencies": {
-    "yaml": "^2.8.1"
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
   }
 }

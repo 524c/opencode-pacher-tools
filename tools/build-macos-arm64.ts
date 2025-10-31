@@ -8,8 +8,7 @@
  * - Support for OPENCODE_BUILD_MODE environment variable
  *
  * Usage:
- *   cd ~/.local/bin/opencode-patcher-tools/opencode/packages/opencode
- *   bun ~/.local/bin/opencode-patcher-tools/tools/build-macos-arm64.ts
+ *   bun tools/build-macos-arm64.ts
  *
  * Environment Variables:
  *   OPENCODE_BUILD_MODE - Build mode: "release" (default) or "commit"
@@ -24,7 +23,15 @@ import { readFileSync } from "fs";
 // Simple logging function
 const log = console.log;
 
-// Detect current directory and load package.json
+// Detect script location and determine project root
+const scriptDir = import.meta.dir;
+const projectRoot = path.resolve(scriptDir, "..");
+const opencodeDir = path.join(projectRoot, "opencode", "packages", "opencode");
+
+// Change to OpenCode packages/opencode directory
+process.chdir(opencodeDir);
+
+// Load package.json from OpenCode directory
 const currentDir = process.cwd();
 let pkg;
 
@@ -33,9 +40,9 @@ try {
   const pkgContent = readFileSync(pkgPath, "utf-8");
   pkg = { default: JSON.parse(pkgContent) };
 } catch (error) {
-  console.error("Error: Must run from OpenCode packages/opencode directory");
+  console.error("Error: Could not find OpenCode packages/opencode directory");
+  console.error(`Expected path: ${opencodeDir}`);
   console.error(`Current directory: ${currentDir}`);
-  console.error(`Expected: .../opencode/packages/opencode`);
   process.exit(1);
 }
 

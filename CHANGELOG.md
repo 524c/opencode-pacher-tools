@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Patch management commands: `enable`, `disable`, `list`, `status` with category filtering
 - Dependency resolution and validation for patches
 - Automatic detection of development vs installation directory in patch tools
+- Package.json with project metadata and npm scripts for build/patch operations
 
 ### Changed
 - Migrate patch configuration from JSON to YAML format (`patches.config.json` → `patches.config.yaml`)
@@ -23,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `_validate_env()` now calls `_auto_setup()` to automatically fix missing or corrupted OpenCode submodule
 - Rewrite `tools/apply-all-patches.ts` to be configuration-driven with independent patch toggling
 - Improve agent detection in agents-md-enforcement patch using msg.info.mode comparison instead of AgentPart for reliable detection of all agent switches
+- Build script now automatically detects project root and changes to correct directory
 
 ### Fixed
 - Preserve user's working directory when running `oc-build` or `oc-up` from non-installation directories
+- Build script execution from any directory (auto-detects correct paths)
