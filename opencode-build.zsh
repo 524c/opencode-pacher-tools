@@ -38,15 +38,24 @@ fi
 : "${DIM:=\033[2m}"
 : "${NC:=\033[0m}"
 
+# Auto-detect development directory
+# If current directory looks like development repo, use it as OPENCODE_PATCHER_DIR
+if [[ -z "$OPENCODE_PATCHER_DIR" ]]; then
+    # Check if current directory has development structure
+    if [[ -f "opencode-build.zsh" && -d "tools" && -d "patches" && -d ".git" ]]; then
+        OPENCODE_PATCHER_DIR="$PWD"
+    else
+        OPENCODE_PATCHER_DIR="$HOME/.local/bin/opencode-patcher-tools"
+    fi
+fi
+
 # Configuration (use existing or set defaults)
-: "${OPENCODE_PATCHER_DIR:=$HOME/.local/bin/opencode-patcher-tools}"
 : "${OPENCODE_DIR:=$OPENCODE_PATCHER_DIR/opencode}"
 : "${OPENCODE_BUILD_MODE:=release}"  # Options: release (default), commit
 : "${OPENCODE_INSTALL_DIR:=$HOME/.local/bin}"  # Binary installation directory
 BINARY_PATH="$OPENCODE_DIR/packages/opencode/dist/opencode-darwin-arm64/bin/opencode"
 INSTALL_PATH="$OPENCODE_INSTALL_DIR/opencode"
 PATCH_SCRIPT="$OPENCODE_PATCHER_DIR/tools/apply-all-patches.ts"
-BUILD_SCRIPT="$OPENCODE_DIR/packages/opencode/script/build-macos-arm64.ts"
 
 # Minimal progress indicator - no spinner, just start/end messages
 _progress_start() {
@@ -314,15 +323,12 @@ opencode_build() {
         return 1
     fi
 
-    # Restore build script (survives git reset --hard)
-    local installed_build_script="$OPENCODE_PATCHER_DIR/tools/build-macos-arm64.ts"
-    [[ ! -f "$installed_build_script" ]] && {
+    # Verify build script exists
+    local build_script="$OPENCODE_PATCHER_DIR/tools/build-macos-arm64.ts"
+    [[ ! -f "$build_script" ]] && {
         _progress_stop "error" "Build script not found"
         return 1
     }
-
-    mkdir -p "$OPENCODE_DIR/packages/opencode/script"
-    cp "$installed_build_script" "$BUILD_SCRIPT"
 
     # Clean build
     local dist_dir="$OPENCODE_DIR/packages/opencode/dist"
@@ -332,13 +338,13 @@ opencode_build() {
     _progress_start "Building..."
     
     # Install dependencies
-    (cd "$OPENCODE_DIR/packages/opencode" && bun install) >/dev/null 2>&1 || {
+    if ! (cd "$OPENCODE_DIR/packages/opencode" && bun install); then
         _progress_stop "error" "Failed to install dependencies"
         return 1
-    }
+    fi
     
-    # Run build script (captures all output)
-    if ! (cd "$OPENCODE_DIR/packages/opencode" && OPENCODE_BUILD_MODE="$OPENCODE_BUILD_MODE" bun "$BUILD_SCRIPT") >/dev/null 2>&1; then
+    # Run build script from tools/ directory (correct path resolution)
+    if ! (cd "$OPENCODE_PATCHER_DIR" && OPENCODE_BUILD_MODE="$OPENCODE_BUILD_MODE" bun "$build_script"); then
         _progress_stop "error" "Build failed"
         return 1
     fi

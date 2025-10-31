@@ -1,0 +1,20 @@
+diff --git a/packages/opencode/tsconfig.json b/packages/opencode/tsconfig.json
+index 9067d84f..ad86b928 100644
+--- a/packages/opencode/tsconfig.json
++++ b/packages/opencode/tsconfig.json
+@@ -2,8 +2,13 @@
+   "$schema": "https://json.schemastore.org/tsconfig",
+   "extends": "@tsconfig/bun/tsconfig.json",
+   "compilerOptions": {
+-    "jsx": "preserve",
+-    "jsxImportSource": "@opentui/solid",
++    // PATCH: jsx-react-mode-fix @ OpenCode v1.0.0
++    // Fix JSX configuration for Bun/SolidJS compatibility
++    // - Changed "jsx" from "preserve" to "react-jsx" (Bun default)
++    // - Changed "jsxImportSource" from "@opentui/solid" to "solid-js"
++    // @opentui/solid only provides type definitions, not JSX runtime functions
++    "jsx": "react-jsx",
++    "jsxImportSource": "solid-js",
+     "lib": ["ESNext", "DOM", "DOM.Iterable"],
+     "types": [],
+     "noUncheckedIndexedAccess": false,

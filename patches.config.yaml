@@ -72,6 +72,20 @@ patches:
           patterns:
             - "PATCH: provider-blacklist-config"
             - modelBlacklist
+  - id: jsx-react-mode-fix
+    name: JSX React Mode Fix
+    file: jsx-react-mode-fix.patch
+    description: Fix JSX configuration for Bun/SolidJS compatibility (OpenCode v1.0.0)
+    category: build-system
+    enabled: true
+    dependencies: []
+    checkApplied:
+      type: grep
+      files:
+        - path: packages/opencode/tsconfig.json
+          patterns:
+            - '"jsx": "react-jsx"'
+            - '"jsxImportSource": "solid-js"'
 categories:
   conversation:
     name: Conversation & Rules Preservation
@@ -85,3 +99,6 @@ categories:
   developer-experience:
     name: Developer Experience
     description: Patches that improve developer workflow
+  build-system:
+    name: Build System & Tooling
+    description: Patches that fix build configuration and tooling issues

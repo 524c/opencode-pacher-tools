@@ -716,6 +716,164 @@ After regenerating the patch, verify:
 
 ---
 
+## jsx-react-mode-fix.patch
+
+### 🎯 Problem & Solution
+
+**Problem:**
+- OpenCode v1.0.0 build fails with Bun error: "Module did not export jsxDEV"
+- Root cause: Two configuration issues in `tsconfig.json`:
+  - `"jsx": "preserve"` incompatible with Bun's bundler (Bun expects transformed JSX)
+  - `"jsxImportSource": "@opentui/solid"` only provides TypeScript type definitions, not actual JSX runtime functions
+- Result: **Build failure** - Bun cannot find required JSX runtime exports (`jsx`, `jsxs`, `jsxDEV`)
+
+**Solution:**
+- Change JSX mode from `"preserve"` to `"react-jsx"` (emits `.jsx()` calls compatible with Bun)
+- Change JSX import source from `"@opentui/solid"` to `"solid-js"` (provides actual JSX runtime exports)
+- Why this works:
+  - `solid-js` exports the actual JSX runtime functions (`jsx`, `jsxs`, `jsxDEV`) that Bun requires
+  - `@opentui/solid` only exports TypeScript type definitions without runtime implementations
+  - `"react-jsx"` mode transforms JSX into function calls that Bun can bundle correctly
+
+**Files Modified:**
+- `packages/opencode/tsconfig.json` - Updates JSX configuration for Bun compatibility
+
+---
+
+### 📐 Implementation Strategy
+
+The patch modifies OpenCode's TypeScript configuration in **one conceptual area**:
+
+#### Fix JSX Configuration for Bun Build Compatibility
+
+**Concept:** Configure TypeScript compiler to emit JSX in a format compatible with Bun's bundler and use a JSX import source that provides actual runtime functions.
+
+**Location:** `packages/opencode/tsconfig.json` (compiler options, lines 5-6)
+
+**Changes:**
+1. JSX mode: `"preserve"` → `"react-jsx"`
+2. JSX import source: `"@opentui/solid"` → `"solid-js"`
+
+**Why this works:**
+- **JSX Mode**: `"react-jsx"` emits JSX as function calls (e.g., `_jsx("div", {...})`) instead of preserving JSX syntax
+- **Import Source**: `solid-js` provides the actual `jsx`, `jsxs`, `jsxDEV` functions that Bun expects
+- **Bun Compatibility**: Bun's bundler can process and bundle the transformed JSX correctly
+
+---
+
+### 🔧 Detailed Implementation Instructions
+
+#### Step 1: Update JSX Compiler Options
+
+**File:** `packages/opencode/tsconfig.json`
+
+**Location:** Compiler options (lines 5-6)
+
+**Find:**
+```json
+{
+  "compilerOptions": {
+    // ... other options
+    "jsx": "preserve",
+    "jsxImportSource": "@opentui/solid",
+    // ... other options
+  }
+}
+```
+
+**Replace with:**
+```json
+{
+  "compilerOptions": {
+    // ... other options
+    // PATCH: jsx-react-mode-fix @ OpenCode v1.0.0
+    // Fix Bun build: use react-jsx mode and solid-js runtime for JSX compatibility
+    "jsx": "react-jsx",
+    "jsxImportSource": "solid-js",
+    // ... other options
+  }
+}
+```
+
+**Explanation:**
+- `"jsx": "react-jsx"`: Transforms JSX into `_jsx()` function calls compatible with Bun
+- `"jsxImportSource": "solid-js"`: Uses `solid-js` package which exports actual JSX runtime functions
+- Version marker: Tracks that patch was created for OpenCode v1.0.0
+
+---
+
+### 🔍 How to Regenerate This Patch
+
+#### Analysis Phase
+
+```bash
+cd opencode
+
+# Check current tsconfig.json JSX settings
+cat packages/opencode/tsconfig.json | grep -A 2 "jsx"
+
+# Verify solid-js provides JSX runtime (should see jsxDEV export)
+bun run -e 'console.log(require("solid-js/jsx-runtime"))'
+
+# Verify @opentui/solid only has types (should fail or show no jsxDEV)
+bun run -e 'console.log(require("@opentui/solid/jsx-runtime"))'
+
+# Check Bun build error (before fix)
+bun run build:macos-arm64  # Should fail with "jsxDEV" error
+```
+
+#### Implementation Phase
+
+1. Open `packages/opencode/tsconfig.json`
+2. Locate `"jsx"` field (line 5)
+3. Change value from `"preserve"` to `"react-jsx"`
+4. Locate `"jsxImportSource"` field (line 6)
+5. Change value from `"@opentui/solid"` to `"solid-js"`
+6. Add version marker comment above modified lines
+
+#### Patch Generation
+
+```bash
+cd opencode
+git add packages/opencode/tsconfig.json
+git diff --cached > ../patches/jsx-react-mode-fix.patch
+```
+
+#### Testing
+
+```bash
+cd opencode
+git reset --hard
+git apply --check ../patches/jsx-react-mode-fix.patch
+git apply ../patches/jsx-react-mode-fix.patch
+bun install
+bun run build:macos-arm64  # Should succeed
+```
+
+---
+
+### 🧪 Validation Checklist
+
+After regenerating the patch, verify:
+
+- [ ] `"jsx": "react-jsx"` present in tsconfig.json (line 5)
+- [ ] `"jsxImportSource": "solid-js"` present in tsconfig.json (line 6)
+- [ ] Version marker comment present above modified lines
+- [ ] Patch applies cleanly with `git apply --check`
+- [ ] OpenCode builds successfully: `bun run build:macos-arm64`
+- [ ] Binary size is reasonable (~68 MB expected)
+- [ ] No "Module did not export jsxDEV" error during build
+- [ ] Server compiles without JSX-related errors
+- [ ] Test runtime: TUI starts without JSX runtime errors
+
+**Build Success Indicators:**
+- Build completes without errors
+- Binary created at `packages/tui/dist/opencode-darwin-arm64`
+- Binary size approximately 68 MB
+- No warnings about missing JSX exports
+
+---
+
 ## summarization-enhancement-p0.patch
 
 ### 🎯 Problem & Solution

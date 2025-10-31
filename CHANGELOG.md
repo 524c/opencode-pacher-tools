@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `summarization-enhancement-p1` patch (agent context preservation across summarization) - removed from project
 
 ### Added
+- New patch `jsx-react-mode-fix.patch` for OpenCode v1.0.0 Bun build compatibility
 - Auto-setup routine in `oc-build` and `oc-up` commands to initialize submodule on first execution or when corrupted
 - Configurable patch system with `patches.config.yaml` for independent patch control
 - Patch management commands: `enable`, `disable`, `list`, `status` with category filtering

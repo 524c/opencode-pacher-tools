@@ -60,21 +60,27 @@ const buildMode = process.env["OPENCODE_BUILD_MODE"] ?? "release";
 let commitHash: string;
 let version: string;
 
+// Git commands must run from repository root (opencode/), not packages/opencode
+const opencodeRepoRoot = path.join(projectRoot, "opencode");
+
 if (buildMode === "release") {
   // Use latest release tag
   try {
-    const tagResult = await $`git describe --tags --abbrev=0`.text();
+    const tagResult =
+      await $`cd ${opencodeRepoRoot} && git describe --tags --abbrev=0`.text();
     commitHash = tagResult.trim();
     version = commitHash; // Use release tag as version
   } catch (error) {
     // Fall back to commit hash if no release tags found
-    const hashResult = await $`git rev-parse --short HEAD`.text();
+    const hashResult =
+      await $`cd ${opencodeRepoRoot} && git rev-parse --short HEAD`.text();
     commitHash = hashResult.trim();
     version = commitHash;
   }
 } else {
   // Use commit hash
-  const hashResult = await $`git rev-parse --short HEAD`.text();
+  const hashResult =
+    await $`cd ${opencodeRepoRoot} && git rev-parse --short HEAD`.text();
   commitHash = hashResult.trim();
   version = commitHash;
 }
