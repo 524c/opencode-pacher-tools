@@ -338,13 +338,13 @@ opencode_build() {
     _progress_start "Building..."
     
     # Install dependencies
-    if ! (cd "$OPENCODE_DIR/packages/opencode" && bun install); then
+    if ! (cd "$OPENCODE_DIR/packages/opencode" && bun install >/dev/null 2>&1); then
         _progress_stop "error" "Failed to install dependencies"
         return 1
     fi
     
     # Run build script from tools/ directory (correct path resolution)
-    if ! (cd "$OPENCODE_PATCHER_DIR" && OPENCODE_BUILD_MODE="$OPENCODE_BUILD_MODE" bun "$build_script"); then
+    if ! (cd "$OPENCODE_PATCHER_DIR" && OPENCODE_BUILD_MODE="$OPENCODE_BUILD_MODE" bun "$build_script" >/dev/null 2>&1); then
         _progress_stop "error" "Build failed"
         return 1
     fi
