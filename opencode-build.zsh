@@ -436,7 +436,7 @@ opencode_upgrade() {
 # Update tools from repository (correct implementation)
 opencode_update_tools() {
     local temp_dir="$(mktemp -d)"
-    local tools_repo="https://github.com/524c/opencode-pacher-tools.git"
+    local tools_repo="https://github.com/524c/opencode-patcher-tools.git"
 
     # Cleanup on exit
     trap "rm -rf '$temp_dir'" EXIT
